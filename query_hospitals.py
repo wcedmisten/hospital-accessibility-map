@@ -101,6 +101,8 @@ isochrone_geoms = [shape(geom) for geom in isochrones]
 print("Finding union")
 u = unary_union(isochrone_geoms)
 
+with open("polygon.json", "w") as f:
+    json.dump(mapping(u), f)
 
 if type(u) is Polygon:
     geom = json.dumps(mapping(u))
