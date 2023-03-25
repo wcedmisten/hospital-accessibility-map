@@ -32,7 +32,7 @@ MAX_TRAVEL_TIME = 30
 m = folium.Map(location=[36.86498460006988, -76.02608518502626], zoom_start=10, tiles='CartoDB positron')
 
 
-isochrones = []
+isochrone_countors = [[], [], [], []]
 
 for idx, record in enumerate(polygon_records):
     print(f"{idx + 1},  of  {len(polygon_records)}")
@@ -49,7 +49,7 @@ for idx, record in enumerate(polygon_records):
         "costing":"auto",
         "denoise":"0.5",
         "generalize":"0",
-        "contours":[{"time":MAX_TRAVEL_TIME}],
+        "contours":[{"time":10},{"time":20},{"time":30},{"time":40}],
         "polygons":True
     }
 
@@ -58,7 +58,8 @@ for idx, record in enumerate(polygon_records):
 
     # geom = json.dumps(isochrone['features'][0]['geometry'])
 
-    isochrones.append(isochrone['features'][0]['geometry'])
+    for idx, geometry in enumerate(isochrone['features']):
+        isochrone_countors[idx].append(geometry['geometry'])
 
     # geo_j = folium.GeoJson(data=geom, style_function=lambda x: {'fillColor': 'orange'})
     # folium.Popup(name).add_to(geo_j)
@@ -80,7 +81,7 @@ for idx, record in enumerate(point_records):
         "costing":"auto",
         "denoise":"1",
         "generalize":"0",
-        "contours":[{"time":MAX_TRAVEL_TIME}],
+        "contours":[{"time":10},{"time":20},{"time":30},{"time":40}],
         "polygons":True
     }
 
@@ -89,36 +90,50 @@ for idx, record in enumerate(point_records):
 
     # geom = json.dumps(isochrone['features'][0]['geometry'])
 
-    isochrones.append(isochrone['features'][0]['geometry'])
+    for idx, geometry in enumerate(isochrone['features']):
+        isochrone_countors[idx].append(geometry['geometry'])
 
     # geo_j = folium.GeoJson(data=geom, style_function=lambda x: {'fillColor': 'orange'})
     # folium.Popup(name).add_to(geo_j)
     folium.Marker([lat, lon], popup=name).add_to(m)
     # geo_j.add_to(m)
 
-isochrone_geoms = [shape(geom) for geom in isochrones]
+colors = ['#a83c32', '#e68040', '#edcd2b', '#74e344']
 
-print("Finding union")
-u = unary_union(isochrone_geoms)
+for idx, geometries in enumerate(isochrone_countors):
+    isochrone_geoms = [shape(geom) for geom in geometries]
 
-with open("polygon.json", "w") as f:
-    json.dump(mapping(u), f)
+    print("Finding union")
+    print(len(geometries))
+    u = unary_union(isochrone_geoms)
 
-if type(u) is Polygon:
-    geom = json.dumps(mapping(u))
+    with open(f"polygon_{idx}.json", "w") as f:
+        json.dump(mapping(u), f)
 
-    geo_j = folium.GeoJson(data=geom, style_function=lambda x: {'fillColor': 'orange'})
-    folium.Popup(name).add_to(geo_j)
-    folium.Marker([lat, lon]).add_to(m)
-    geo_j.add_to(m)
-else:
-    for union_iso in u.geoms:
-        geom = json.dumps(mapping(union_iso))
+    print(colors[idx])
 
-        geo_j = folium.GeoJson(data=geom, style_function=lambda x: {'fillColor': 'orange'})
+    fillColor = colors[idx]
+    color = colors[idx]
+    style_function = lambda x, fillColor=fillColor, color=color: {
+        "fillColor": fillColor,
+        "color": color
+    }
+
+    if type(u) is Polygon:
+        geom = json.dumps(mapping(u))
+
+        geo_j = folium.GeoJson(data=geom, style_function=style_function)
         folium.Popup(name).add_to(geo_j)
         folium.Marker([lat, lon]).add_to(m)
         geo_j.add_to(m)
+    else:
+        for union_iso in u.geoms:
+            geom = json.dumps(mapping(union_iso))
+
+            geo_j = folium.GeoJson(data=geom, style_function=style_function)
+            folium.Popup(name).add_to(geo_j)
+            folium.Marker([lat, lon]).add_to(m)
+            geo_j.add_to(m)
 
 output_file = "map2.html"
 m.save(output_file)
