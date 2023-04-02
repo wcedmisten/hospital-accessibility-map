@@ -1,4 +1,10 @@
-custom_files/
 polygon_*.json
 map2.html
 iso.*tiles
+planetiler_data/
+valhalla_data/
+go-pmtiles
+*.mbtiles
+*.pmtiles
+*.pickle
+hospitals.json

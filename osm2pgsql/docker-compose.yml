@@ -1,0 +1,14 @@
+version: "3.9"  # optional since v1.27.0
+services:
+  postgis:
+    container_name: postgis
+    image: postgis/postgis
+    ports:
+      - "15432:5432"
+    environment:
+      - POSTGRES_PASSWORD=password
+    volumes:
+      - type: bind
+        source: ./postgresql.conf
+        target: /etc/postgresql.conf
+    command: ["postgres", "-c", "config_file=/etc/postgresql.conf"]

@@ -1,107 +1,130 @@
-import pprint
-import webbrowser
-import folium
 import psycopg2
 import psycopg2.extras
 import json
 import requests
-from shapely.geometry import mapping, shape, Polygon
+from shapely.geometry import mapping, shape, Point, LineString
 from shapely.ops import unary_union
+from shapely.validation import make_valid
+import pickle
+import os
 
+from shapely.geometry.collection import GeometryCollection
 
-conn = psycopg2.connect("host=localhost dbname=postgres user=postgres port=15432 password=password")
+def get_hospital_records():
+    conn = psycopg2.connect("host=localhost dbname=postgres user=postgres port=15432 password=password")
 
-# Open a cursor to perform database operations
-cur = conn.cursor(cursor_factory = psycopg2.extras.RealDictCursor)
+    # Open a cursor to perform database operations
+    cur = conn.cursor(cursor_factory = psycopg2.extras.RealDictCursor)
 
-osm_query = """select ST_AsText(ST_Transform(ST_Centroid(way),4326)) as centroid,osm_id,name from planet_osm_polygon where amenity='hospital'"""
+    osm_query = """select ST_AsText(ST_Transform(ST_Centroid(way),4326)) as centroid,osm_id,name from planet_osm_polygon where amenity='hospital'"""
+    cur.execute(osm_query)
 
-cur.execute(osm_query)
+    polygon_records = cur.fetchall()
 
-polygon_records = cur.fetchall()
+    osm_query = """select ST_AsText(ST_Transform(way,4326)) as centroid,osm_id,name from planet_osm_point where amenity='hospital'"""
 
-osm_query = """select ST_AsText(ST_Transform(way,4326)) as centroid,osm_id,name from planet_osm_point where amenity='hospital'"""
+    cur.execute(osm_query)
 
-cur.execute(osm_query)
+    point_records = cur.fetchall()
 
-point_records = cur.fetchall()
-
-print(point_records)
+    return polygon_records + point_records
 
 MAX_TRAVEL_TIME = 30
-m = folium.Map(location=[36.86498460006988, -76.02608518502626], zoom_start=10, tiles='CartoDB positron')
 
 
-isochrone_countors = [[], [], [], []]
-
-for idx, record in enumerate(polygon_records):
-    print(f"{idx + 1},  of  {len(polygon_records)}")
+def structure_record(record):
     name = record["name"]
     center = record["centroid"]
     lon, lat = center.replace("POINT(", "").replace(")", "").split(" ")
     lon = float(lon)
     lat = float(lat)
 
-    payload = {
-        "locations":[
-            {"lat": lat,"lon": lon}
-        ],
-        "costing":"auto",
-        "denoise":"0.5",
-        "generalize":"0",
-        "contours":[{"time":10},{"time":20},{"time":30},{"time":40}],
-        "polygons":True
-    }
+    return {"name": name, "lon": lon, "lat": lat, "osm_id": record["osm_id"]}
 
-    request = f"http://localhost:8002/isochrone?json={json.dumps(payload)}"
-    isochrone = requests.get(request).json()
+if os.path.isfile("hospitals.json"):
+    with open("hospitals.json", "r") as f:
+        all_records = json.load(f)
+        structured_records = [structure_record(record) for record in all_records]
+else:
+    all_records = get_hospital_records()
+    structured_records = [structure_record(record) for record in all_records]
+    with open("hospitals.json", "w") as f:
+        json.dump(all_records, f)
 
-    # geom = json.dumps(isochrone['features'][0]['geometry'])
+features = []
 
-    for idx, geometry in enumerate(isochrone['features']):
-        isochrone_countors[idx].append(geometry['geometry'])
+for item in all_records:
+    point = Point(float(item['centroid'].split()[0][6:]), float(item['centroid'].split()[1][:-1]))
+    features.append({
+        'type': 'Feature',
+        'geometry': mapping(point),
+        'properties': {
+            'osm_id': item['osm_id'],
+            'name': item['name']
+        }
+    })
 
-    # geo_j = folium.GeoJson(data=geom, style_function=lambda x: {'fillColor': 'orange'})
-    # folium.Popup(name).add_to(geo_j)
-    folium.Marker([lat, lon], popup=name).add_to(m)
-    # geo_j.add_to(m)
+geojson = {
+    'type': 'FeatureCollection',
+    'features': features
+}
 
-for idx, record in enumerate(point_records):
-    print(f"{idx + 1},  of  {len(point_records)}")
-    name = record["name"]
-    center = record["centroid"]
-    lon, lat = center.replace("POINT(", "").replace(")", "").split(" ")
-    lon = float(lon)
-    lat = float(lat)
+with open('hospitals_layer.json', 'w') as f:
+    json.dump(geojson, f)
 
-    payload = {
-        "locations":[
-            {"lat": lat,"lon": lon}
-        ],
-        "costing":"auto",
-        "denoise":"1",
-        "generalize":"0",
-        "contours":[{"time":10},{"time":20},{"time":30},{"time":40}],
-        "polygons":True
-    }
+print('GeoJSON data written to file: hospitals_layer.json')
 
-    request = f"http://localhost:8002/isochrone?json={json.dumps(payload)}"
-    isochrone = requests.get(request).json()
+if os.path.isfile("iso_contours.pickle"):
+    with open("iso_contours.pickle", "rb") as f:
+        isochrone_contours = pickle.load(f)
+else:
+    isochrone_contours = [[], [], [], []]
 
-    # geom = json.dumps(isochrone['features'][0]['geometry'])
+    hospitals = []
 
-    for idx, geometry in enumerate(isochrone['features']):
-        isochrone_countors[idx].append(geometry['geometry'])
+    for idx, record in enumerate(structured_records):
+        print(f"{idx + 1},  of  {len(structured_records)}")
+        name = record["name"]
+        lon = record["lon"]
+        lat = record["lat"]
 
-    # geo_j = folium.GeoJson(data=geom, style_function=lambda x: {'fillColor': 'orange'})
-    # folium.Popup(name).add_to(geo_j)
-    folium.Marker([lat, lon], popup=name).add_to(m)
-    # geo_j.add_to(m)
+        payload = {
+            "locations":[
+                {"lat": lat,"lon": lon}
+            ],
+            "costing":"auto",
+            "denoise":"0.5",
+            "generalize":"0",
+            "contours":[{"time":10},{"time":20},{"time":30},{"time":40}],
+            "polygons":True
+        }
 
-colors = ['#a83c32', '#e68040', '#edcd2b', '#74e344']
+        request = f"http://localhost:8002/isochrone?json={json.dumps(payload)}"
+        isochrone = requests.get(request).json()
 
-for idx, geometries in enumerate(isochrone_countors):
-    isochrone_geoms = [shape(geom) for geom in geometries]
+        for idx, geometry in enumerate(isochrone['features']):
+            isochrone_contours[idx].append(geometry['geometry'])
+
+    with open("iso_contours.pickle", "wb") as f:
+        pickle.dump(isochrone_contours, f)
+
+for idx, geometries in enumerate(isochrone_contours):
+    isochrone_geoms = []
+
+    for geom in geometries:
+        geom_shape = shape(geom)
+        if not geom_shape.is_valid:
+            geom_shapes = make_valid(geom_shape)
+            x = make_valid(shape(geom))
+            if (type(x) == GeometryCollection):
+                for y in x.geoms:
+                    if type(y) != LineString:
+                        isochrone_geoms.append(y)
+            else:
+                isochrone_geoms.append(x)
+        else:
+            isochrone_geoms.append(geom_shape)
+
 
     print("Finding union")
     print(len(geometries))
@@ -109,32 +132,3 @@ for idx, geometries in enumerate(isochrone_countors):
 
     with open(f"polygon_{idx}.json", "w") as f:
         json.dump(mapping(u), f)
-
-    print(colors[idx])
-
-    fillColor = colors[idx]
-    color = colors[idx]
-    style_function = lambda x, fillColor=fillColor, color=color: {
-        "fillColor": fillColor,
-        "color": color
-    }
-
-    if type(u) is Polygon:
-        geom = json.dumps(mapping(u))
-
-        geo_j = folium.GeoJson(data=geom, style_function=style_function)
-        folium.Popup(name).add_to(geo_j)
-        folium.Marker([lat, lon]).add_to(m)
-        geo_j.add_to(m)
-    else:
-        for union_iso in u.geoms:
-            geom = json.dumps(mapping(union_iso))
-
-            geo_j = folium.GeoJson(data=geom, style_function=style_function)
-            folium.Popup(name).add_to(geo_j)
-            folium.Marker([lat, lon]).add_to(m)
-            geo_j.add_to(m)
-
-output_file = "map2.html"
-m.save(output_file)
-webbrowser.open(output_file, new=2)

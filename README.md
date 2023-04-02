@@ -36,21 +36,20 @@ PGPASSWORD=password osm2pgsql --create --verbose -P 15432 -U postgres -H localho
 
 ## Valhalla
 
-Copy osm extract to `custom_files/`
+Copy osm extract to `valhalla_data/`
 
 ```
 cd ..
-mkdir custom_files/
-cp /path/to/extract.osm.pbf custom_files/
+cp /path/to/extract.osm.pbf valhalla_data/
 ```
 
 Run valhalla with:
 
 ```
-docker run -dt -v $PWD/custom_files:/custom_files -p 8002:8002 --name valhalla gisops/valhalla:latest
+docker run -dt -v $PWD/valhalla_data:/custom_files -p 8002:8002 --name valhalla gisops/valhalla:latest
 ```
 
-Afterwards run
+Then run
 ```
 docker logs -f valhalla
 ```
@@ -71,10 +70,13 @@ python3 query_hospitals.py
 
 Follow the instructions here: https://github.com/felt/tippecanoe
 
-Convert the geoJson polygons to mbtiles
+Convert the geoJson polygons to mbtiles. `--simplification 6` is needed for displaying
+large isochrone polygons in mapLibreGL.
+Otherwise we hit the maximum vertices available in WebGL (65535) at low zoom levels.
+This also helps reduce the size of the tiles.
 
 ```
-tippecanoe -f polygon_0.json -f polygon_1.json -f polygon_2.json -f polygon_3.json -o virginia_iso.mbtiles
+tippecanoe --simplification 6 -f polygon_0.json -f polygon_1.json -f polygon_2.json -f polygon_3.json -o virginia_iso.mbtiles
 ```
 
 ### Install go-pmtiles
@@ -86,29 +88,27 @@ https://github.com/protomaps/go-pmtiles
 ```
 git clone https://github.com/protomaps/go-pmtiles
 cd go-pmtiles/
-go run main convert virginia_iso.mbtiles virginia_iso.pmtiles
+go install
+go run main.go convert ../virginia_iso.mbtiles ../virginia_iso.pmtiles
+cd ..
 ```
 
-# Generating a base map
+# Generating a base map with planetiler
 
 ```
-git clone https://github.com/openmaptiles/openmaptiles
-cd openmaptiles
-# replace virginia with whatever area you want
-# see here for supported regions https://github.com/openmaptiles/openmaptiles/blob/master/QUICKSTART.md
-./quickstart.sh virginia
+cp /path/to/extract.osm.pbf planetiler_data/
+
+docker run -e JAVA_TOOL_OPTIONS="-Xmx4g" -v "$(pwd)/planetiler_data":/data ghcr.io/onthegomap/planetiler:latest --download --osm-path=/data/virginia-latest.osm.pbf --output /data/extract.pmtiles --maxzoom=8
 ```
 
-Alternatively, you can use a custom extract with:
-```
-mkdir -p data
-mv mydata.osm.pbf data/
-make generate-bbox-file area=mydata
-./quickstart.sh mydata
+This will automatically create a tiles file `planetiler_data/extract.pmtiles` in the PMTiles format.
+No conversion is necessary.
+
+# Copy these files to a public directory or upload them to a static hosting service.
+
 ```
 
-This will create another `.mbtiles` file under `data/tiles.mbtiles`
-
+```
 
 # population.py
 
