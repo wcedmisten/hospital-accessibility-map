@@ -29,9 +29,6 @@ def get_hospital_records():
 
     return polygon_records + point_records
 
-MAX_TRAVEL_TIME = 30
-
-
 def structure_record(record):
     name = record["name"]
     center = record["centroid"]

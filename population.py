@@ -4,7 +4,7 @@ import rasterio
 import rasterio
 from rasterio.features import geometry_window
 
-from shapely.geometry import shape
+from shapely.geometry import shape, mapping
 from shapely.ops import unary_union
 
 import rasterio
@@ -12,105 +12,82 @@ from rasterstats import zonal_stats
 
 from shapely.ops import transform
 import pyproj
+from pyproj import Geod
 
 GHS_POP_FILENAME = (
     "/home/wcedmisten/Downloads/GHS_POP_E2020_GLOBE_R2022A_54009_100_V1_0.tif"
 )
 
-dc_geom = """{
-      "type": "Feature",
-      "properties": {},
-      "geometry": {
-        "coordinates": [
-          [
-            [
-              -83.59040921031028,
-              36.64493325346298
-            ],
-            [
-              -75.86288564384472,
-              36.54557820497291
-            ],
-            [
-              -75.26475881974928,
-              38.0169901518764
-            ],
-            [
-              -76.15163652444231,
-              37.89230860939507
-            ],
-            [
-              -77.07288933396738,
-              38.90522302216186
-            ],
-            [
-              -78.26914298215678,
-              39.59201849940126
-            ],
-            [
-              -83.59040921031028,
-              36.64493325346298
-            ]
-          ]
-        ],
-        "type": "Polygon"
-      } }"""
+# GHS_POP_FILENAME = "/home/wcedmisten/Downloads/GHS_POP_E2020_GLOBE_R2022A_54009_100_V1_0_R5_C11.tif"
+
+# src = rasterio.open(GHS_POP_FILENAME)
+# from rasterio.plot import show
+
+# show(src, cmap="viridis", vmin=0, vmax=60)
+
+# this was a sanity check to see if the DC population lines up with my methods 
+# of calculating population within a polygon
 
 dataset = rasterio.open(
     GHS_POP_FILENAME
 )  # Note GetRasterBand() takes band no. starting from 1 not 0
 
-for i in range(4):
-  with open(f"polygon_{i}.json", "r") as f:
-      geom = json.load(f)
+project_to_mollweide = pyproj.Transformer.from_proj(
+        pyproj.Proj('epsg:4326'), # source coordinate system
+        pyproj.Proj('esri:54009'),
+        always_xy=True
+)
 
-  # print(geom["geometry"]["coordinates"])
+def estimate_population(dataset, geom):
   polygon = shape(geom)
 
-  project = pyproj.Transformer.from_proj(
-          pyproj.Proj('epsg:4326'), # source coordinate system
-          pyproj.Proj('esri:54009'),
-          always_xy=True
-  )
+  projected = transform(project_to_mollweide.transform, polygon)
 
-  projected = transform(project.transform, polygon)
+  window = geometry_window(dataset, [projected], pad_x=10, pad_y=10)
 
-  window = geometry_window(dataset, [projected] ,pad_x=10, pad_y=10)
-
-  z = dataset.read(masked=True, window=window)[0]
-  print(dataset.crs)
-  print(dataset.bounds)
-  print({i: dtype for i, dtype in zip(dataset.indexes, dataset.dtypes)})
+  dataset.read(masked=True, window=window)[0]
 
   zs = zonal_stats(projected, GHS_POP_FILENAME, stats="sum")
-  near_hospitals = zs[0]["sum"]
-  print(near_hospitals)
+  return round(zs[0]["sum"])
+  
+# sanity check
+# with open("dc.json", "r") as f:
+#    dc_geom = json.load(f)
 
-  with open("states.json", "r") as f:
-      states = json.load(f)
+# print(estimate_population(dataset, dc_geom))
 
-  virginia = states["features"][46]
-  va_geom = shape(virginia["geometry"])
+with open("states.json", "r") as f:
+    states = json.load(f)
 
-  va_projected = transform(project.transform, va_geom)
+virginia = states["features"][46]
+va_geom = shape(virginia["geometry"])
+in_va = estimate_population(dataset, va_geom)
 
-  va_union_projected = unary_union([va_projected, projected])
+print(f"Estimated population of Virginia: {in_va}")
 
-  window = geometry_window(dataset, [va_union_projected] ,pad_x=10, pad_y=10)
+geod = Geod(ellps="WGS84")
+va_area = abs(geod.geometry_area_perimeter(va_geom)[0])
 
-  z = dataset.read(masked=True, window=window)[0]
-  print(dataset.crs)
-  print(dataset.bounds)
-  print({i: dtype for i, dtype in zip(dataset.indexes, dataset.dtypes)})
+print(f"Area of Virginia: {va_area}")
 
-  zs = zonal_stats(va_union_projected, GHS_POP_FILENAME, stats="sum")
-  in_va = zs[0]["sum"]
-  print(in_va)
+times = [40, 30, 20, 10]
 
-  print(f"{near_hospitals} / {in_va}")
-  print(near_hospitals / in_va)
+for i in range(4):
+  with open(f"polygon_{i}.json", "r") as f:
+      iso_geom = shape(json.load(f))
 
-# src = rasterio.open(FILENAME)
-# from rasterio.plot import show
+  # intersection is needed to cut off isochrones that extend beyond VA borders
+  # this is because the OSM extract includes roads that don't
+  # get cut strictly at the border, but extend into other states
+  # we don't want to include those populations in the numerator
+  iso_va_intersection = va_geom.intersection(iso_geom)
 
-# show(src, cmap="viridis", vmin=0, vmax=300)
+  near_hospitals = estimate_population(dataset, iso_va_intersection)
+
+  near_hospitals_area = abs(geod.geometry_area_perimeter(iso_va_intersection)[0])
+
+  print(f"Estimated {near_hospitals} residents within {times[i]} mins of a hospital.")
+  print(f"{near_hospitals / in_va * 100} percent of Virginia residents")
+  print(f"Area of this region: {near_hospitals_area}")
+  print(f"{near_hospitals_area / va_area * 100} percent of Virginia surface area")
+  print()
