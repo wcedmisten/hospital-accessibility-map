@@ -1,14 +1,26 @@
+# Prerequisites
+
 # Download OSM extract
+
+I used the following, but you can use any extract:
 
 https://download.geofabrik.de/north-america/us/virginia.html
 
-# Download Population Grid
+# Convenience Script
 
-https://ghsl.jrc.ec.europa.eu/download.php?ds=pop
+For convenience, these steps have been converted into `process_extract.sh`.
+To run the script, edit the following lines to reflect the directory and filename of your .osm.pbf file:
 
-Select GHS-POP 2020 100m Mollweide
+```
+OSM_PBF_DIRECTORY=/home/wcedmisten/Downloads
+OSM_PBF_FILENAME=virginia-latest.osm.pbf
+```
 
-# Set up
+Then run `./process_extract.sh`
+
+# Manual Set up
+
+If you wish to run these steps individually, you can instead run:
 
 ## PostGIS
 
@@ -104,14 +116,42 @@ docker run -e JAVA_TOOL_OPTIONS="-Xmx4g" -v "$(pwd)/planetiler_data":/data ghcr.
 This will automatically create a tiles file `planetiler_data/extract.pmtiles` in the PMTiles format.
 No conversion is necessary.
 
-# Copy these files to a public directory or upload them to a static hosting service.
+# How to use these files
+
+Three files will be created if these steps are followed succesfully:
+
+* a base map PMtiles file (`planetiler_data/extract.pmtiles`)
+* a driving distance PMtiles file (`<extract_name>_iso.pmtiles`)
+* a GeoJSON file containing all hospitals and their names (`hospitals_layer.json`)
+
+These can be used with a MapLibreGL project, similar to this demo:
+
+https://github.com/wcedmisten/nextjs-protomap-demo/blob/main/pages/isochrone/index.tsx
+
+Copy the two PMtiles files into the `/public` directory, and update
+the `sources` to:
 
 ```
-
+"sources": {
+    "openmaptiles": {
+    "type": "vector",
+    "url": "pmtiles:///nextjs-protomap-demo/extract.pmtiles"
+    },
+    "isochrone": {
+    "type": "vector",
+    "url": "pmtiles:///nextjs-protomap-demo/<extract_name>_iso.pmtiles",
+    },
+},
 ```
 
 # population.py
 
-Examines population data within a polygon.
+Examines population data within driving distance to a hospital.
 
+You will need to download the GHS-POP dataset and modify the path in population.py
 
+https://ghsl.jrc.ec.europa.eu/download.php?ds=pop
+
+Select GHS-POP 2020 100m Mollweide
+
+Update the `GHS_POP_FILENAME` variable to your downloaded file path.
