@@ -1,3 +1,5 @@
+![map](/screenshots/map.png)
+
 # Prerequisites
 
 # Download OSM extract
