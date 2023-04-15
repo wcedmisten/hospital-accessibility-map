@@ -50,18 +50,22 @@ def estimate_population(dataset, geom):
   print("Projecting polygon to ESRI:54009")
   projected = transform(project_to_mollweide.transform, polygon)
 
-  window = geometry_window(dataset, [projected], pad_x=10, pad_y=10)
+  #window = geometry_window(dataset, [projected], pad_x=10, pad_y=10)
 
-  print(dataset.width, dataset.height)
-  print(window)
+  #print(dataset.width, dataset.height)
+  #print(window)
 
-  print("Reading data window")
-  data_window = dataset.read(masked=False, window=window)[0]
+  #print("Reading data window")
+  #data_window = dataset.read(masked=False, window=window)[0]
 
-  affine = dataset.window_transform(window)
+  #affine = dataset.window_transform(window)
 
   print("Calculating population statistics")
-  zs = zonal_stats(projected, data_window, stats="sum", affine=affine, nodata=np.nan)
+  #zs = zonal_stats(projected, data_window, stats="sum count mean", affine=affine, nodata=np.nan)
+  zs = zonal_stats(projected, GHS_POP_FILENAME, stats="sum")
+
+  #print("Count: " + str(zs[0]["count"]))
+  #print("Mean:  " + str(zs[0]["mean"]))
 
   return round(zs[0]["sum"])
   
