@@ -61,10 +61,14 @@ with open("states.json", "r") as f:
 
 state_data = {}
 
+iso_geoms = []
+
+for i in range(4):
+    with open(f"polygon_{i}.json", "r") as f:
+        iso_geoms.append(shape(json.load(f)))
+
 for state in states["features"]:
     state_name = state["properties"]["name"]
-    if state_name != "Virginia":
-      continue
 
     state_geom = shape(state["geometry"])
     in_state = estimate_population(dataset, state_geom)
@@ -80,11 +84,7 @@ for state in states["features"]:
 
     state_data[state_name] = {}
 
-
-    for i in range(4):
-        with open(f"polygon_{i}.json", "r") as f:
-            iso_geom = shape(json.load(f))
-
+    for iso_geom in iso_geoms:
         # intersection is needed to cut off isochrones that extend beyond VA borders
         # this is because the OSM extract includes roads that don't
         # get cut strictly at the border, but extend into other states
@@ -110,5 +110,5 @@ for state in states["features"]:
            "area_percent": near_hospitals_area / state_area * 100
         }
 
-with open("state_population_analysis.json", "r") as f:
+with open("state_population_analysis.json", "w") as f:
     json.dump(state_data, f)
