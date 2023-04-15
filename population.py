@@ -59,35 +59,56 @@ def estimate_population(dataset, geom):
 with open("states.json", "r") as f:
     states = json.load(f)
 
-virginia = states["features"][46]
-va_geom = shape(virginia["geometry"])
-in_va = estimate_population(dataset, va_geom)
+state_data = {}
 
-print(f"Estimated population of Virginia: {in_va}")
+for state in states["features"]:
+    state_name = state["properties"]["name"]
+    if state_name != "Virginia":
+      continue
 
-geod = Geod(ellps="WGS84")
-va_area = abs(geod.geometry_area_perimeter(va_geom)[0])
+    state_geom = shape(state["geometry"])
+    in_state = estimate_population(dataset, state_geom)
 
-print(f"Area of Virginia: {va_area}")
+    print(f"Estimated population of {state_name}: {in_state}")
 
-times = [40, 30, 20, 10]
+    geod = Geod(ellps="WGS84")
+    state_area = abs(geod.geometry_area_perimeter(state_geom)[0])
 
-for i in range(4):
-  with open(f"polygon_{i}.json", "r") as f:
-      iso_geom = shape(json.load(f))
+    print(f"Area of {state_name}: {state_area}")
 
-  # intersection is needed to cut off isochrones that extend beyond VA borders
-  # this is because the OSM extract includes roads that don't
-  # get cut strictly at the border, but extend into other states
-  # we don't want to include those populations in the numerator
-  iso_va_intersection = va_geom.intersection(iso_geom)
+    times = [40, 30, 20, 10]
 
-  near_hospitals = estimate_population(dataset, iso_va_intersection)
+    state_data[state_name] = {}
 
-  near_hospitals_area = abs(geod.geometry_area_perimeter(iso_va_intersection)[0])
 
-  print(f"Estimated {near_hospitals} residents within {times[i]} mins of a hospital.")
-  print(f"{near_hospitals / in_va * 100} percent of Virginia residents")
-  print(f"Area of this region: {near_hospitals_area}")
-  print(f"{near_hospitals_area / va_area * 100} percent of Virginia surface area")
-  print()
+    for i in range(4):
+        with open(f"polygon_{i}.json", "r") as f:
+            iso_geom = shape(json.load(f))
+
+        # intersection is needed to cut off isochrones that extend beyond VA borders
+        # this is because the OSM extract includes roads that don't
+        # get cut strictly at the border, but extend into other states
+        # we don't want to include those populations in the numerator
+        iso_va_intersection = state_geom.intersection(iso_geom)
+
+        near_hospitals = estimate_population(dataset, iso_va_intersection)
+
+        near_hospitals_area = abs(geod.geometry_area_perimeter(iso_va_intersection)[0])
+
+        print(f"Estimated {near_hospitals} residents within {times[i]} mins of a hospital.")
+        print(f"{near_hospitals / in_state * 100} percent of {state_name} residents")
+        print(f"Area of this region: {near_hospitals_area}")
+        print(f"{near_hospitals_area / state_area * 100} percent of {state_name} surface area")
+        print()
+
+        state_data[state_name][times[i]] = {
+           "population_absolute": near_hospitals,
+           "state_population_absolute": in_state,
+           "population_percent": near_hospitals / in_state * 100,
+           "area_absolute": near_hospitals_area,
+           "state_area_absolute": state_area,
+           "area_percent": near_hospitals_area / state_area * 100
+        }
+
+with open("state_population_analysis.json", "r") as f:
+    json.dump(state_data, f)
