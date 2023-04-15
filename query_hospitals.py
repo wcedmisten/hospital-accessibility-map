@@ -3,6 +3,8 @@ import psycopg2.extras
 import json
 import requests
 from shapely.geometry import mapping, shape, Point, LineString
+from shapely.geometry.polygon import Polygon
+from shapely.geometry.multipolygon import MultiPolygon
 from shapely.ops import unary_union
 from shapely.validation import make_valid
 import pickle
@@ -80,27 +82,30 @@ else:
     hospitals = []
 
     for idx, record in enumerate(structured_records):
-        print(f"{idx + 1},  of  {len(structured_records)}")
-        name = record["name"]
-        lon = record["lon"]
-        lat = record["lat"]
+        try:
+            print(f"{idx + 1},  of  {len(structured_records)}")
+            name = record["name"]
+            lon = record["lon"]
+            lat = record["lat"]
 
-        payload = {
-            "locations":[
-                {"lat": lat,"lon": lon}
-            ],
-            "costing":"auto",
-            "denoise":"0.5",
-            "generalize":"0",
-            "contours":[{"time":10},{"time":20},{"time":30},{"time":40}],
-            "polygons":True
-        }
+            payload = {
+                "locations":[
+                    {"lat": lat,"lon": lon}
+                ],
+                "costing":"auto",
+                "denoise":"0.5",
+                "generalize":"0",
+                "contours":[{"time":10},{"time":20},{"time":30},{"time":40}],
+                "polygons":True
+            }
 
-        request = f"http://localhost:8002/isochrone?json={json.dumps(payload)}"
-        isochrone = requests.get(request).json()
+            request = f"http://localhost:8002/isochrone?json={json.dumps(payload)}"
+            isochrone = requests.get(request).json()
 
-        for idx, geometry in enumerate(isochrone['features']):
-            isochrone_contours[idx].append(geometry['geometry'])
+            for idx, geometry in enumerate(isochrone['features']):
+                isochrone_contours[idx].append(geometry['geometry'])
+        except Exception as e:
+            print(e)
 
     with open("iso_contours.pickle", "wb") as f:
         pickle.dump(isochrone_contours, f)
@@ -113,15 +118,14 @@ for idx, geometries in enumerate(isochrone_contours):
         if not geom_shape.is_valid:
             geom_shapes = make_valid(geom_shape)
             x = make_valid(shape(geom))
-            if (type(x) == GeometryCollection):
+            if type(x) == GeometryCollection:
                 for y in x.geoms:
-                    if type(y) != LineString:
+                    if type(y) == Polygon or type(y) == MultiPolygon:
                         isochrone_geoms.append(y)
-            else:
+            if type(x) == MultiPolygon or type(x) == Polygon:
                 isochrone_geoms.append(x)
         else:
             isochrone_geoms.append(geom_shape)
-
 
     print("Finding union")
     print(len(geometries))
