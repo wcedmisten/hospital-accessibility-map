@@ -14,6 +14,10 @@ from shapely.ops import transform
 import pyproj
 from pyproj import Geod
 
+import faulthandler
+
+faulthandler.enable()
+
 GHS_POP_FILENAME = (
     "/home/wcedmisten/Downloads/GHS_POP_E2020_GLOBE_R2022A_54009_100_V1_0.tif"
 )
@@ -69,7 +73,7 @@ for i in range(4):
 
 for state in states["features"]:
     state_name = state["properties"]["name"]
-    if state_name != "Alaska":
+    if state_name != "Hawaii":
         continue
 
     state_geom = shape(state["geometry"])
