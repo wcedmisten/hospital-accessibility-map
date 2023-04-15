@@ -45,9 +45,9 @@ def estimate_population(dataset, geom):
 
   window = geometry_window(dataset, [projected], pad_x=10, pad_y=10)
 
-  dataset.read(masked=True, window=window)[0]
+  data_window = dataset.read(masked=True, window=window)[0]
 
-  zs = zonal_stats(projected, GHS_POP_FILENAME, stats="sum")
+  zs = zonal_stats(projected, data_window, stats="sum")
   return round(zs[0]["sum"])
   
 # sanity check
@@ -69,8 +69,12 @@ for i in range(4):
 
 for state in states["features"]:
     state_name = state["properties"]["name"]
+    if state_name != "Alaska":
+        continue
 
     state_geom = shape(state["geometry"])
+
+    print(type(state_geom))
     in_state = estimate_population(dataset, state_geom)
 
     print(f"Estimated population of {state_name}: {in_state}")
