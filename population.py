@@ -51,7 +51,7 @@ def estimate_population(dataset, geom):
 
   data_window = dataset.read(masked=True, window=window)[0]
 
-  zs = zonal_stats(projected, data_window, stats="sum")
+  zs = zonal_stats(projected, data_window, affine=data_window.affine stats="sum")
   return round(zs[0]["sum"])
   
 # sanity check
