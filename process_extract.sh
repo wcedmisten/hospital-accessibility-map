@@ -20,7 +20,7 @@ cp $OSM_PBF planetiler_data
 docker run -e JAVA_TOOL_OPTIONS="-Xmx4g" -v "$(pwd)/planetiler_data":/data ghcr.io/onthegomap/planetiler:latest --download --osm-path=/data/$OSM_PBF_FILENAME --output /data/basemap.pmtiles --maxzoom=8
 
 cp $OSM_PBF valhalla_data
-docker run -dt -v $PWD/valhalla_data:/custom_files -p 8002:8002 --name valhalla gisops/valhalla:latest
+docker run -dt -v $PWD/valhalla_data:/custom_files -p 8002:8002 --name valhalla gisops/valhalla:3.3.0
 
 echo "Waiting for valhalla to finish import"
 until $(curl --output /dev/null --silent --fail localhost:8002/status); do
