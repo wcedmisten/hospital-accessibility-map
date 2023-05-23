@@ -88,7 +88,7 @@ for i in range(4):
 
 for state in states["features"]:
     state_name = state["properties"]["name"]
-    if state_name == "Alaska" or state_name == "Puerto Rico":
+    if state_name == "Puerto Rico":
         continue
 
     state_geom = shape(state["geometry"])
