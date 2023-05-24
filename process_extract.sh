@@ -36,11 +36,11 @@ python3 query_hospitals.py
 
 echo "Converting polygons into tiles"
 
-tippecanoe --simplification 6 -f polygon_0.json -f polygon_1.json -f polygon_2.json -f polygon_3.json -o $OSM_PBF_FILENAME_iso.mbtiles
+tippecanoe --simplification 6 -f polygon_0.json -f polygon_1.json -f polygon_2.json -f polygon_3.json -o ${OSM_PBF_FILENAME}_iso.mbtiles
 
 cd go-pmtiles/
 go install
-go run main.go convert ../$OSM_PBF_FILENAME_iso.mbtiles ../$OSM_PBF_FILENAME_iso.pmtiles
+go run main.go convert ../${OSM_PBF_FILENAME}_iso.mbtiles ../${OSM_PBF_FILENAME}_iso.pmtiles
 cd ..
 
 echo "Output completed. Final files:"
